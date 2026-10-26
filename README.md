@@ -1,3 +1,6 @@
+# ETA
+Smart Campus  An intelligent destination-dispatch elevator routing and dynamic ETA system designed to eradicate peak-hour elevator congestion across campus blocks at Lovely Professional University (LPU).
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
