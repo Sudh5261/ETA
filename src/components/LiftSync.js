@@ -36,6 +36,12 @@ const FITNESS_QUOTES = [
   "“Don't wait for the lift when your legs are ready to move!”"
 ];
 
+const INITIAL_LIFTS = {
+  A: { id: 'A', name: 'High-Zone Express', currentFloor: 0, targetQueue: [], direction: 'idle', occupancy: 0, assignedFloor: null },
+  B: { id: 'B', name: 'Mid-Zone Shuttle', currentFloor: 0, targetQueue: [], direction: 'idle', occupancy: 0, assignedFloor: null },
+  C: { id: 'C', name: 'General All-Stop', currentFloor: 0, targetQueue: [], direction: 'idle', occupancy: 0, assignedFloor: null },
+};
+
 export default function LiftSync() {
   // Auth State
   const [currentUser, setCurrentUser] = useState(null);
@@ -55,18 +61,14 @@ export default function LiftSync() {
     '9': 0, '8': 0, '7': 0, '6': 0, '5': 0, '4': 0, '3': 0, '2': 0, '1': 0, 'G': 0
   });
 
-  const [lifts, setLifts] = useState({
-    A: { id: 'A', name: 'High-Zone Express', currentFloor: 0, targetQueue: [], direction: 'idle', occupancy: 0, assignedFloor: null },
-    B: { id: 'B', name: 'Mid-Zone Shuttle', currentFloor: 0, targetQueue: [], direction: 'idle', occupancy: 0, assignedFloor: null },
-    C: { id: 'C', name: 'General All-Stop', currentFloor: 0, targetQueue: [], direction: 'idle', occupancy: 0, assignedFloor: null },
-  });
+  const [lifts, setLifts] = useState(INITIAL_LIFTS);
 
   const [selectedFloor, setSelectedFloor] = useState(null);
   const [showStairModal, setShowStairModal] = useState(false);
   const [activeQuote, setActiveQuote] = useState("");
   const [activeBoardingPass, setActiveBoardingPass] = useState(null);
   const [countdown, setCountdown] = useState(null);
-  const [logs, setLogs] = useState([{ id: 1, time: '09:14:00', text: 'Smart Life System Initialized.', type: 'info' }]);
+  const [logs, setLogs] = useState([{ id: 1, time: '09:14:00', text: 'Smart Life System Initialized. Lifts parked at Ground Floor.', type: 'info' }]);
 
   const [stats, setStats] = useState({
     dispatches: 142,
@@ -75,6 +77,7 @@ export default function LiftSync() {
   });
 
   useEffect(() => {
+    setLifts(INITIAL_LIFTS);
     const savedSession = localStorage.getItem('smart_life_session');
     if (savedSession) {
       setCurrentUser(JSON.parse(savedSession));
@@ -153,7 +156,7 @@ export default function LiftSync() {
     const nextState = !isPeakHour;
     setIsPeakHour(nextState);
     if (nextState) {
-      addLog('🔥 PEAK TRAFFIC MODE ENABLED: Door delay reduced to 25 seconds.', 'warning');
+      addLog('🔥 PEAK TRAFFIC MODE ENABLED: Door delay reduced to 25 seconds per stop.', 'warning');
     } else {
       addLog('NORMAL TRAFFIC MODE RESTORED: Standard 30-second door timing active.', 'info');
     }
@@ -165,6 +168,7 @@ export default function LiftSync() {
     addLog(`Switched active monitoring network to ${blockObj.name}.`, 'info');
   };
 
+  // Movement Engine
   useEffect(() => {
     if (!isSimRunning || emergencyActive) return;
 
@@ -235,11 +239,17 @@ export default function LiftSync() {
     processDispatch(targetFloorNum, floorStr);
   };
 
+  // UPDATED ACCURATE ETA CALCULATION (Includes door dwell for destination + all intermediate stops)
   const calculateRealETA = (lift, targetFloorNum) => {
     const floorDistance = Math.abs(lift.currentFloor - targetFloorNum);
-    const travelTimeSeconds = floorDistance * 1.5;
+    const travelTimeSeconds = floorDistance * 1.5; // 1.5s travel speed per floor
+    
+    // Dynamic Door Dwell Time: 25s in Peak Traffic Mode, 30s in Normal Mode
     const doorDwellTime = isPeakHour ? 25 : 30;
-    const doorDelaySeconds = lift.targetQueue.length * doorDwellTime;
+    
+    // Counts queued intermediate stops + 1 for destination door open/boarding time
+    const totalStops = lift.targetQueue.length + 1;
+    const doorDelaySeconds = totalStops * doorDwellTime;
     
     return Math.round(travelTimeSeconds + doorDelaySeconds);
   };
@@ -278,7 +288,9 @@ export default function LiftSync() {
     }
 
     const assignedLift = lifts[chosenLiftKey];
-    const calculatedETA = Math.max(5, calculateRealETA(assignedLift, targetFloorNum));
+    
+    // Calculate accurate ETA with 30s (normal) or 25s (peak) door timing
+    const calculatedETA = calculateRealETA(assignedLift, targetFloorNum);
 
     setLifts((prev) => ({
       ...prev,
@@ -321,7 +333,6 @@ export default function LiftSync() {
       {!currentUser && (
         <div className="auth-overlay">
           <div className="auth-card">
-            
             <div className="auth-logo-badge">
               <Zap size={36} />
             </div>
@@ -405,7 +416,6 @@ export default function LiftSync() {
                 {authMode === 'login' ? 'Sign Up' : 'Sign In'}
               </button>
             </p>
-
           </div>
         </div>
       )}
@@ -505,7 +515,7 @@ export default function LiftSync() {
                   
                   <div className={`lift-car ${neonClass}`} style={{ bottom: `${bottomPercent}%` }}>
                     <div className="lift-car-header">
-                      <span>FL {lift.currentFloor} ({lift.direction.toUpperCase()})</span>
+                      <span>FL {lift.currentFloor === 0 ? 'G' : lift.currentFloor} ({lift.direction.toUpperCase()})</span>
                       <span>{lift.occupancy}% Load</span>
                     </div>
                     <div className="load-bar-bg">
